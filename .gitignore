@@ -1,0 +1,14 @@
+
+# Node modules
+backend/node_modules/
+frontend/node_modules/
+
+# Logs
+*.log
+
+# Environment files
+backend/app/config/db.config.js
+
+# Dist / build outputs
+frontend/dist/
+
