@@ -1,0 +1,49 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set image tag to commit SHA
+        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Docker login
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build & push backend (commit tag + latest)
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/crud-mean-backend:${IMAGE_TAG} ./backend
+          docker tag  ${{ secrets.DOCKER_USERNAME }}/crud-mean-backend:${IMAGE_TAG} ${{ secrets.DOCKER_USERNAME }}/crud-mean-backend:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/crud-mean-backend:${IMAGE_TAG}
+          docker push ${{ secrets.DOCKER_USERNAME }}/crud-mean-backend:latest
+
+      - name: Build & push frontend (commit tag + latest)
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/crud-mean-frontend:${IMAGE_TAG} ./frontend
+          docker tag  ${{ secrets.DOCKER_USERNAME }}/crud-mean-frontend:${IMAGE_TAG} ${{ secrets.DOCKER_USERNAME }}/crud-mean-frontend:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/crud-mean-frontend:${IMAGE_TAG}
+          docker push ${{ secrets.DOCKER_USERNAME }}/crud-mean-frontend:latest
+
+      - name: Deploy to EC2 (pull commit-tagged images and restart)
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            set -e
+            cd ~/crud-dd-mean-app
+            git pull origin main
+            export IMAGE_TAG=${GITHUB_SHA}
+            docker-compose pull
+            docker-compose up -d
+            docker image prune -f
+
